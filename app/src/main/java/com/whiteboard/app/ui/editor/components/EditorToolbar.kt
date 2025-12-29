@@ -1,13 +1,13 @@
 package com.whiteboard.app.ui.editor.components
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Redo
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -101,98 +101,141 @@ fun EditorToolbar(
     modifier: Modifier = Modifier
 ) {
     val canvasState = viewModel.canvasState
+    var isExpanded by remember { mutableStateOf(false) }
 
     Column(
-        modifier = modifier
-            .padding(8.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-            .padding(8.dp),
+        modifier = modifier.padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // Selection tool
-        ToolbarButton(
-            icon = Icons.Default.NearMe,
-            label = "Select",
-            isSelected = canvasState.editMode == EditMode.Select,
-            onClick = { canvasState.editMode = EditMode.Select }
-        )
+        // Toggle button
+        FloatingActionButton(
+            onClick = { isExpanded = !isExpanded },
+            modifier = Modifier.size(48.dp),
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        ) {
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.Close else Icons.Default.Menu,
+                contentDescription = if (isExpanded) "Close" else "Tools"
+            )
+        }
 
-        // Pan tool
-        ToolbarButton(
-            icon = Icons.Default.PanTool,
-            label = "Pan",
-            isSelected = canvasState.editMode == EditMode.Pan,
-            onClick = { canvasState.editMode = EditMode.Pan }
-        )
+        // Expandable toolbar
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                    .padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                // Selection tool
+                SmallToolbarButton(
+                    icon = Icons.Default.NearMe,
+                    label = "Select",
+                    isSelected = canvasState.editMode == EditMode.Select,
+                    onClick = { 
+                        canvasState.editMode = EditMode.Select
+                        isExpanded = false
+                    }
+                )
 
-        Divider(modifier = Modifier.padding(vertical = 4.dp))
+                // Pan tool
+                SmallToolbarButton(
+                    icon = Icons.Default.PanTool,
+                    label = "Pan",
+                    isSelected = canvasState.editMode == EditMode.Pan,
+                    onClick = { 
+                        canvasState.editMode = EditMode.Pan
+                        isExpanded = false
+                    }
+                )
 
-        // Shape tools
-        ToolbarButton(
-            icon = Icons.Default.CropSquare,
-            label = "Rectangle",
-            isSelected = canvasState.editMode == EditMode.AddShape(ShapeType.RECTANGLE),
-            onClick = { canvasState.editMode = EditMode.AddShape(ShapeType.RECTANGLE) }
-        )
+                Divider(modifier = Modifier.padding(vertical = 2.dp))
 
-        ToolbarButton(
-            icon = Icons.Default.RoundedCorner,
-            label = "Rounded",
-            isSelected = canvasState.editMode == EditMode.AddShape(ShapeType.ROUNDED_RECTANGLE),
-            onClick = { canvasState.editMode = EditMode.AddShape(ShapeType.ROUNDED_RECTANGLE) }
-        )
+                // Shape tools
+                SmallToolbarButton(
+                    icon = Icons.Default.CropSquare,
+                    label = "Rectangle",
+                    isSelected = canvasState.editMode == EditMode.AddShape(ShapeType.RECTANGLE),
+                    onClick = { 
+                        canvasState.editMode = EditMode.AddShape(ShapeType.RECTANGLE)
+                        isExpanded = false
+                    }
+                )
 
-        ToolbarButton(
-            icon = Icons.Default.Circle,
-            label = "Circle",
-            isSelected = canvasState.editMode == EditMode.AddShape(ShapeType.CIRCLE),
-            onClick = { canvasState.editMode = EditMode.AddShape(ShapeType.CIRCLE) }
-        )
+                SmallToolbarButton(
+                    icon = Icons.Default.RoundedCorner,
+                    label = "Rounded",
+                    isSelected = canvasState.editMode == EditMode.AddShape(ShapeType.ROUNDED_RECTANGLE),
+                    onClick = { 
+                        canvasState.editMode = EditMode.AddShape(ShapeType.ROUNDED_RECTANGLE)
+                        isExpanded = false
+                    }
+                )
 
-        ToolbarButton(
-            icon = Icons.Default.Diamond,
-            label = "Diamond",
-            isSelected = canvasState.editMode == EditMode.AddShape(ShapeType.DIAMOND),
-            onClick = { canvasState.editMode = EditMode.AddShape(ShapeType.DIAMOND) }
-        )
+                SmallToolbarButton(
+                    icon = Icons.Default.Circle,
+                    label = "Circle",
+                    isSelected = canvasState.editMode == EditMode.AddShape(ShapeType.CIRCLE),
+                    onClick = { 
+                        canvasState.editMode = EditMode.AddShape(ShapeType.CIRCLE)
+                        isExpanded = false
+                    }
+                )
 
-        Divider(modifier = Modifier.padding(vertical = 4.dp))
+                SmallToolbarButton(
+                    icon = Icons.Default.Diamond,
+                    label = "Diamond",
+                    isSelected = canvasState.editMode == EditMode.AddShape(ShapeType.DIAMOND),
+                    onClick = { 
+                        canvasState.editMode = EditMode.AddShape(ShapeType.DIAMOND)
+                        isExpanded = false
+                    }
+                )
 
-        // Connector tool
-        ToolbarButton(
-            icon = Icons.Default.Timeline,
-            label = "Connect",
-            isSelected = canvasState.editMode == EditMode.AddConnector,
-            onClick = {
-                canvasState.cancelConnector()
-                canvasState.editMode = EditMode.AddConnector
+                Divider(modifier = Modifier.padding(vertical = 2.dp))
+
+                // Connector tool
+                SmallToolbarButton(
+                    icon = Icons.Default.Timeline,
+                    label = "Connect",
+                    isSelected = canvasState.editMode == EditMode.AddConnector,
+                    onClick = {
+                        canvasState.cancelConnector()
+                        canvasState.editMode = EditMode.AddConnector
+                        isExpanded = false
+                    }
+                )
+
+                Divider(modifier = Modifier.padding(vertical = 2.dp))
+
+                // Grid toggle
+                SmallToolbarButton(
+                    icon = Icons.Default.GridOn,
+                    label = "Grid",
+                    isSelected = canvasState.showGrid,
+                    onClick = { canvasState.showGrid = !canvasState.showGrid }
+                )
+
+                // Snap toggle
+                SmallToolbarButton(
+                    icon = Icons.Default.FilterCenterFocus,
+                    label = "Snap",
+                    isSelected = canvasState.snapToGrid,
+                    onClick = { canvasState.snapToGrid = !canvasState.snapToGrid }
+                )
             }
-        )
-
-        Divider(modifier = Modifier.padding(vertical = 4.dp))
-
-        // Grid toggle
-        ToolbarButton(
-            icon = Icons.Default.GridOn,
-            label = "Grid",
-            isSelected = canvasState.showGrid,
-            onClick = { canvasState.showGrid = !canvasState.showGrid }
-        )
-
-        // Snap toggle
-        ToolbarButton(
-            icon = Icons.Default.FilterCenterFocus,
-            label = "Snap",
-            isSelected = canvasState.snapToGrid,
-            onClick = { canvasState.snapToGrid = !canvasState.snapToGrid }
-        )
+        }
     }
 }
 
 @Composable
-private fun ToolbarButton(
+private fun SmallToolbarButton(
     icon: ImageVector,
     label: String,
     isSelected: Boolean,
@@ -201,6 +244,7 @@ private fun ToolbarButton(
     IconButton(
         onClick = onClick,
         modifier = Modifier
+            .size(40.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(
                 if (isSelected) MaterialTheme.colorScheme.primaryContainer
@@ -210,6 +254,7 @@ private fun ToolbarButton(
         Icon(
             imageVector = icon,
             contentDescription = label,
+            modifier = Modifier.size(20.dp),
             tint = if (isSelected) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurface
         )
@@ -229,29 +274,38 @@ fun ZoomControls(
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
             .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = { canvasState.zoom(0.8f, androidx.compose.ui.geometry.Offset.Zero) }) {
-            Icon(Icons.Default.ZoomOut, "Zoom Out")
+        IconButton(
+            onClick = { canvasState.zoom(0.8f, androidx.compose.ui.geometry.Offset.Zero) },
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(Icons.Default.ZoomOut, "Zoom Out", modifier = Modifier.size(18.dp))
         }
 
         Text(
             text = "${(canvasState.scale * 100).toInt()}%",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.width(48.dp),
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.width(40.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
 
-        IconButton(onClick = { canvasState.zoom(1.25f, androidx.compose.ui.geometry.Offset.Zero) }) {
-            Icon(Icons.Default.ZoomIn, "Zoom In")
+        IconButton(
+            onClick = { canvasState.zoom(1.25f, androidx.compose.ui.geometry.Offset.Zero) },
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(Icons.Default.ZoomIn, "Zoom In", modifier = Modifier.size(18.dp))
         }
 
-        IconButton(onClick = {
-            canvasState.updateScale(1f)
-            canvasState.updateOffset(androidx.compose.ui.geometry.Offset.Zero)
-        }) {
-            Icon(Icons.Default.FitScreen, "Reset View")
+        IconButton(
+            onClick = {
+                canvasState.updateScale(1f)
+                canvasState.updateOffset(androidx.compose.ui.geometry.Offset.Zero)
+            },
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(Icons.Default.FitScreen, "Reset View", modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -273,14 +327,20 @@ fun SelectionActions(
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
             .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         if (hasShapeSelected) {
-            IconButton(onClick = { viewModel.showTextEditor = true }) {
-                Icon(Icons.Default.TextFields, "Edit Text")
+            IconButton(
+                onClick = { viewModel.showTextEditor = true },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(Icons.Default.TextFields, "Edit Text", modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = { viewModel.showColorPicker = true }) {
-                Icon(Icons.Default.Palette, "Color")
+            IconButton(
+                onClick = { viewModel.showColorPicker = true },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(Icons.Default.Palette, "Color", modifier = Modifier.size(18.dp))
             }
         }
 
@@ -288,9 +348,10 @@ fun SelectionActions(
             onClick = {
                 if (hasShapeSelected) viewModel.deleteSelectedShape()
                 else viewModel.deleteSelectedConnector()
-            }
+            },
+            modifier = Modifier.size(36.dp)
         ) {
-            Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+            Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
         }
     }
 }
