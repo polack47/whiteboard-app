@@ -1,5 +1,5 @@
 package com.whiteboard.app.ui.editor.components
-
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -210,7 +210,7 @@ private fun ColorTypeButton(
         )
     }
 }
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectorStyleDialog(
     viewModel: EditorViewModel,
