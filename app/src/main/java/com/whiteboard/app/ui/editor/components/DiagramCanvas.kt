@@ -4,19 +4,17 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import android.graphics.Paint
 import com.whiteboard.app.data.model.*
-import com.whiteboard.app.ui.editor.CanvasState
 import com.whiteboard.app.ui.editor.EditorViewModel
 
 @Composable
@@ -29,25 +27,23 @@ fun DiagramCanvas(
     val shapesMap = viewModel.getShapesMap()
 
     var dragStartShape by remember { mutableStateOf<DiagramShape?>(null) }
-    var dragStartPosition by remember { mutableStateOf(Offset.Zero) }
     var pendingConnectorEndPoint by remember { mutableStateOf<Offset?>(null) }
+
+    // Transform state for zoom and pan (two finger gestures)
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        if (zoomChange != 1f) {
+            canvasState.zoom(zoomChange, Offset.Zero)
+        }
+        canvasState.pan(panChange)
+    }
 
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFFAFAFA))
-            .pointerInput(canvasState.editMode) {
-                detectTransformGestures { centroid, pan, zoom, _ ->
-                    if (canvasState.editMode == EditMode.Pan || canvasState.editMode == EditMode.Select) {
-                        if (zoom != 1f) {
-                            canvasState.zoom(zoom, canvasState.screenToCanvas(centroid))
-                        }
-                        if (canvasState.editMode == EditMode.Pan) {
-                            canvasState.pan(pan)
-                        }
-                    }
-                }
-            }
+            // Two finger zoom and pan
+            .transformable(state = transformState)
+            // Tap gestures
             .pointerInput(canvasState.editMode) {
                 detectTapGestures(
                     onTap = { screenPos ->
@@ -57,7 +53,7 @@ fun DiagramCanvas(
                             is EditMode.AddShape -> {
                                 viewModel.addShape(mode.type, canvasPos)
                             }
-                            is EditMode.Select -> {
+                            is EditMode.Select, is EditMode.Pan -> {
                                 val shape = viewModel.findShapeAt(canvasPos)
                                 if (shape != null) {
                                     canvasState.selectShape(shape.id)
@@ -81,7 +77,6 @@ fun DiagramCanvas(
                                     }
                                 }
                             }
-                            else -> {}
                         }
                     },
                     onDoubleTap = { screenPos ->
@@ -95,6 +90,7 @@ fun DiagramCanvas(
                     }
                 )
             }
+            // Drag gestures for moving/resizing shapes
             .pointerInput(canvasState.editMode, canvasState.selectedShapeId) {
                 detectDragGestures(
                     onDragStart = { screenPos ->
@@ -106,14 +102,14 @@ fun DiagramCanvas(
                                 if (selectedId != null) {
                                     val shape = shapesMap[selectedId]
                                     if (shape != null) {
-                                        val handle = shape.getResizeHandle(canvasPos, 20f / canvasState.scale)
+                                        // Check resize handles first (larger touch area)
+                                        val handle = shape.getResizeHandle(canvasPos, 40f / canvasState.scale)
                                         if (handle != null) {
                                             canvasState.startResizing(handle)
                                             dragStartShape = shape
                                         } else if (shape.containsPoint(canvasPos)) {
                                             canvasState.startDragging()
                                             dragStartShape = shape
-                                            dragStartPosition = canvasPos
                                         }
                                     }
                                 } else {
@@ -122,7 +118,6 @@ fun DiagramCanvas(
                                         canvasState.selectShape(shape.id)
                                         canvasState.startDragging()
                                         dragStartShape = shape
-                                        dragStartPosition = canvasPos
                                     }
                                 }
                             }
@@ -153,7 +148,7 @@ fun DiagramCanvas(
                                     }
                                 }
                             }
-                            canvasState.isDragging -> {
+                            canvasState.isDragging && canvasState.editMode == EditMode.Select -> {
                                 canvasState.selectedShapeId?.let { shapeId ->
                                     val currentShape = shapesMap[shapeId]
                                     if (currentShape != null) {
@@ -282,14 +277,14 @@ fun DiagramCanvas(
                 }
             }
 
-            // Draw handles for selected shape
+            // Draw handles for selected shape (larger)
             if (isSelected) {
-                drawResizeHandles(shape, scale, offset)
+                drawResizeHandles(shape, scale, offset, handleSize = 16f)
             }
 
-            // Draw anchor points in connector mode
+            // Draw anchor points in connector mode (larger)
             if (canvasState.editMode == EditMode.AddConnector) {
-                drawAnchorPoints(shape, scale, offset)
+                drawAnchorPoints(shape, scale, offset, anchorSize = 14f)
             }
         }
     }
@@ -301,7 +296,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGrid(
     offset: Offset
 ) {
     val scaledGridSize = gridSize * scale
-    if (scaledGridSize < 5f) return // Don't draw grid if too zoomed out
+    if (scaledGridSize < 5f) return
 
     val startX = (offset.x % scaledGridSize) - scaledGridSize
     val startY = (offset.y % scaledGridSize) - scaledGridSize
