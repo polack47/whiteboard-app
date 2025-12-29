@@ -6,8 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Redo
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -50,13 +50,13 @@ fun EditorTopBar(
                 onClick = { viewModel.undo() },
                 enabled = viewModel.undoRedoManager.canUndo
             ) {
-                Icon(Icons.AutoMirrored.Filled.Undo, "Undo")
+                Icon(Icons.Default.Undo, "Undo")
             }
             IconButton(
                 onClick = { viewModel.redo() },
                 enabled = viewModel.undoRedoManager.canRedo
             ) {
-                Icon(Icons.AutoMirrored.Filled.Redo, "Redo")
+                Icon(Icons.Default.Redo, "Redo")
             }
             IconButton(onClick = { viewModel.saveDiagram() }) {
                 Icon(Icons.Default.Save, "Save")
@@ -127,7 +127,7 @@ fun EditorToolbar(
             onClick = { canvasState.editMode = EditMode.Pan }
         )
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        Divider(modifier = Modifier.padding(vertical = 4.dp))
 
         // Shape tools
         ToolbarButton(
@@ -158,7 +158,7 @@ fun EditorToolbar(
             onClick = { canvasState.editMode = EditMode.AddShape(ShapeType.DIAMOND) }
         )
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        Divider(modifier = Modifier.padding(vertical = 4.dp))
 
         // Connector tool
         ToolbarButton(
@@ -171,7 +171,7 @@ fun EditorToolbar(
             }
         )
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        Divider(modifier = Modifier.padding(vertical = 4.dp))
 
         // Grid toggle
         ToolbarButton(
