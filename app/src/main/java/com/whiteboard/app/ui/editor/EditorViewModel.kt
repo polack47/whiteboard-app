@@ -28,8 +28,8 @@ class EditorViewModel(
     var showTextEditor by mutableStateOf(false)
     var editingText by mutableStateOf("")
 
-    private val shapesMap: Map<String, DiagramShape>
-        get() = diagram.shapes.associateBy { it.id }
+    private val shapesMapInternalInternal: Map<String, DiagramShape>
+    get() = diagram.shapes.associateBy { it.id }
 
     init {
         if (diagramId != null) {
@@ -81,7 +81,7 @@ class EditorViewModel(
     }
 
     fun moveShape(shapeId: String, newPosition: Offset) {
-        val shape = shapesMap[shapeId] ?: return
+        val shape = shapesMapInternal[shapeId] ?: return
         val snappedPos = canvasState.snapToGridIfEnabled(newPosition)
         
         val updatedShape = shape.copy(x = snappedPos.x, y = snappedPos.y)
@@ -91,14 +91,14 @@ class EditorViewModel(
     }
 
     fun finishMoveShape(shapeId: String, originalShape: DiagramShape) {
-        val newShape = shapesMap[shapeId] ?: return
+        val newShape = shapesMapInternal[shapeId] ?: return
         if (originalShape.x != newShape.x || originalShape.y != newShape.y) {
             undoRedoManager.recordAction(DiagramAction.ModifyShape(originalShape, newShape))
         }
     }
 
     fun resizeShape(shapeId: String, handle: ResizeHandle, delta: Offset) {
-        val shape = shapesMap[shapeId] ?: return
+        val shape = shapesMapInternal[shapeId] ?: return
         
         var newX = shape.x
         var newY = shape.y
@@ -170,14 +170,14 @@ class EditorViewModel(
     }
 
     fun finishResizeShape(shapeId: String, originalShape: DiagramShape) {
-        val newShape = shapesMap[shapeId] ?: return
+        val newShape = shapesMapInternal[shapeId] ?: return
         if (originalShape != newShape) {
             undoRedoManager.recordAction(DiagramAction.ModifyShape(originalShape, newShape))
         }
     }
 
     fun updateShapeText(shapeId: String, text: String) {
-        val shape = shapesMap[shapeId] ?: return
+        val shape = shapesMapInternal[shapeId] ?: return
         val oldShape = shape
         val newShape = shape.copy(text = text)
         
@@ -188,7 +188,7 @@ class EditorViewModel(
     }
 
     fun updateShapeColor(shapeId: String, fillColor: Color, strokeColor: Color) {
-        val shape = shapesMap[shapeId] ?: return
+        val shape = shapesMapInternal[shapeId] ?: return
         val oldShape = shape
         val newShape = shape.copy(
             fillColor = fillColor.toArgb(),
@@ -203,7 +203,7 @@ class EditorViewModel(
 
     fun deleteSelectedShape() {
         val shapeId = canvasState.selectedShapeId ?: return
-        val shape = shapesMap[shapeId] ?: return
+        val shape = shapesMapInternal[shapeId] ?: return
         
         // Also remove connected connectors
         val connectedConnectors = diagram.connectors.filter { 
@@ -302,8 +302,8 @@ class EditorViewModel(
 
     fun findConnectorNear(canvasPoint: Offset, threshold: Float = 15f): Connector? {
         return diagram.connectors.firstOrNull { connector ->
-            val start = connector.getStartPosition(shapesMap)
-            val end = connector.getEndPosition(shapesMap)
+            val start = connector.getStartPosition(shapesMapInternal)
+            val end = connector.getEndPosition(shapesMapInternal)
             if (start != null && end != null) {
                 pointToLineDistance(canvasPoint, start, end) < threshold
             } else {
@@ -327,5 +327,5 @@ class EditorViewModel(
         return (point - projection).getDistance()
     }
 
-    fun getShapesMap(): Map<String, DiagramShape> = shapesMap
+    fun getShapesMap(): Map<String, DiagramShape> = shapesMapInternal
 }
