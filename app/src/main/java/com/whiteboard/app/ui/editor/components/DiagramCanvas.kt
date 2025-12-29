@@ -18,7 +18,6 @@ import androidx.compose.ui.input.pointer.positionChanged
 import android.graphics.Paint
 import com.whiteboard.app.data.model.*
 import com.whiteboard.app.ui.editor.EditorViewModel
-import kotlin.math.abs
 
 @Composable
 fun DiagramCanvas(
@@ -27,41 +26,55 @@ fun DiagramCanvas(
 ) {
     val diagram = viewModel.diagram
     val canvasState = viewModel.canvasState
-    val shapesMap = viewModel.getShapesMap()
-
+    
     var dragStartShape by remember { mutableStateOf<DiagramShape?>(null) }
     var pendingConnectorEndPoint by remember { mutableStateOf<Offset?>(null) }
-    var activePointerId by remember { mutableStateOf<Long?>(null) }
+    var currentResizeHandle by remember { mutableStateOf<ResizeHandle?>(null) }
+    var isDraggingShape by remember { mutableStateOf(false) }
+    var isResizingShape by remember { mutableStateOf(false) }
 
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFFAFAFA))
-            .pointerInput(canvasState.editMode, canvasState.selectedShapeId) {
+            .pointerInput(canvasState.editMode, canvasState.selectedShapeId, diagram.shapes) {
                 awaitEachGesture {
                     val firstDown = awaitFirstDown(requireUnconsumed = false)
                     val firstDownPos = firstDown.position
                     val canvasPos = canvasState.screenToCanvas(firstDownPos)
-                    activePointerId = firstDown.id.value
                     
-                    var isDragging = false
-                    var isZooming = false
+                    // Reset states
+                    isDraggingShape = false
+                    isResizingShape = false
+                    currentResizeHandle = null
+                    dragStartShape = null
+                    
                     var hasMoved = false
                     var totalDrag = Offset.Zero
                     var lastPosition = firstDownPos
-                    var currentResizeHandle: ResizeHandle? = null
+                    var isMultiTouch = false
                     
-                    // Check what we're touching
+                    // Get current shapes map
+                    val shapesMap = viewModel.getShapesMap()
+                    
+                    // Find what we're touching
                     val touchedShape = viewModel.findShapeAt(canvasPos)
                     val selectedShape = canvasState.selectedShapeId?.let { shapesMap[it] }
                     
-                    // Check resize handle if shape is selected
+                    // Check if touching resize handle of selected shape
                     if (selectedShape != null && canvasState.editMode == EditMode.Select) {
-                        currentResizeHandle = selectedShape.getResizeHandle(canvasPos, 50f / canvasState.scale)
-                        if (currentResizeHandle != null) {
+                        val handle = selectedShape.getResizeHandle(canvasPos, 60f / canvasState.scale)
+                        if (handle != null) {
+                            currentResizeHandle = handle
                             dragStartShape = selectedShape
-                            canvasState.startResizing(currentResizeHandle)
+                            isResizingShape = true
                         }
+                    }
+                    
+                    // If not resizing, check if we should drag a shape
+                    if (!isResizingShape && touchedShape != null && canvasState.editMode == EditMode.Select) {
+                        canvasState.selectShape(touchedShape.id)
+                        dragStartShape = touchedShape
                     }
 
                     do {
@@ -72,7 +85,7 @@ fun DiagramCanvas(
                         
                         // Multi-touch: zoom and pan
                         if (pointers.size >= 2) {
-                            isZooming = true
+                            isMultiTouch = true
                             val zoom = event.calculateZoom()
                             val pan = event.calculatePan()
                             val centroid = event.calculateCentroid()
@@ -85,69 +98,59 @@ fun DiagramCanvas(
                             pointers.forEach { it.consume() }
                         } 
                         // Single touch
-                        else if (pointers.size == 1) {
+                        else if (pointers.size == 1 && !isMultiTouch) {
                             val change = pointers.first()
                             val currentPos = change.position
                             val delta = currentPos - lastPosition
                             totalDrag += delta
                             
-                            // Consider it a drag after moving 10 pixels
-                            if (!hasMoved && totalDrag.getDistance() > 10f) {
+                            // Start dragging after 8 pixels movement
+                            if (!hasMoved && totalDrag.getDistance() > 8f) {
                                 hasMoved = true
-                                isDragging = true
                                 
-                                // Start appropriate drag action
-                                when (canvasState.editMode) {
-                                    is EditMode.Select -> {
-                                        if (currentResizeHandle == null) {
-                                            if (touchedShape != null) {
-                                                canvasState.selectShape(touchedShape.id)
-                                                dragStartShape = touchedShape
-                                                canvasState.startDragging()
-                                            }
-                                        }
-                                    }
-                                    is EditMode.Pan -> {
-                                        canvasState.startDragging()
-                                    }
-                                    else -> {}
+                                if (!isResizingShape && dragStartShape != null) {
+                                    isDraggingShape = true
+                                    canvasState.startDragging()
+                                } else if (canvasState.editMode == EditMode.Pan) {
+                                    canvasState.startDragging()
                                 }
                             }
                             
-                            // Handle ongoing drag
+                            // Handle ongoing movement
                             if (hasMoved && change.positionChanged()) {
                                 when {
                                     // Resizing shape
-                                    canvasState.isResizing && currentResizeHandle != null -> {
-                                        val scaledDelta = delta / canvasState.scale
+                                    isResizingShape && currentResizeHandle != null -> {
                                         canvasState.selectedShapeId?.let { shapeId ->
-                                            viewModel.resizeShape(shapeId, currentResizeHandle, scaledDelta)
+                                            viewModel.resizeShape(shapeId, currentResizeHandle!!, delta, canvasState.scale)
                                         }
+                                        change.consume()
                                     }
                                     // Pan mode - move canvas
                                     canvasState.editMode == EditMode.Pan -> {
                                         canvasState.pan(delta)
+                                        change.consume()
                                     }
                                     // Select mode - move shape
-                                    canvasState.editMode == EditMode.Select && canvasState.isDragging -> {
-                                        canvasState.selectedShapeId?.let { shapeId ->
-                                            val currentShape = shapesMap[shapeId]
-                                            if (currentShape != null) {
-                                                val scaledDelta = delta / canvasState.scale
-                                                val newPos = Offset(
-                                                    currentShape.x + scaledDelta.x,
-                                                    currentShape.y + scaledDelta.y
-                                                )
-                                                viewModel.moveShape(shapeId, newPos)
-                                            }
+                                    isDraggingShape && canvasState.selectedShapeId != null -> {
+                                        val currentShapesMap = viewModel.getShapesMap()
+                                        val currentShape = currentShapesMap[canvasState.selectedShapeId]
+                                        if (currentShape != null) {
+                                            val scaledDelta = delta / canvasState.scale
+                                            val newPos = Offset(
+                                                currentShape.x + scaledDelta.x,
+                                                currentShape.y + scaledDelta.y
+                                            )
+                                            viewModel.moveShape(canvasState.selectedShapeId!!, newPos)
                                         }
+                                        change.consume()
                                     }
                                     // Connector mode
-                                    canvasState.editMode == EditMode.AddConnector -> {
+                                    canvasState.editMode == EditMode.AddConnector && canvasState.pendingConnectorStart != null -> {
                                         pendingConnectorEndPoint = canvasState.screenToCanvas(currentPos)
+                                        change.consume()
                                     }
                                 }
-                                change.consume()
                             }
                             
                             lastPosition = currentPos
@@ -157,13 +160,13 @@ fun DiagramCanvas(
                     // Gesture ended
                     val endCanvasPos = canvasState.screenToCanvas(lastPosition)
                     
-                    // Handle tap (no significant movement)
-                    if (!hasMoved && !isZooming) {
+                    // Handle tap (no significant movement and no multi-touch)
+                    if (!hasMoved && !isMultiTouch) {
                         when (val mode = canvasState.editMode) {
                             is EditMode.AddShape -> {
                                 viewModel.addShape(mode.type, endCanvasPos)
                             }
-                            is EditMode.Select, is EditMode.Pan -> {
+                            is EditMode.Select -> {
                                 val shape = viewModel.findShapeAt(endCanvasPos)
                                 if (shape != null) {
                                     canvasState.selectShape(shape.id)
@@ -174,6 +177,14 @@ fun DiagramCanvas(
                                     } else {
                                         canvasState.clearSelection()
                                     }
+                                }
+                            }
+                            is EditMode.Pan -> {
+                                val shape = viewModel.findShapeAt(endCanvasPos)
+                                if (shape != null) {
+                                    canvasState.selectShape(shape.id)
+                                } else {
+                                    canvasState.clearSelection()
                                 }
                             }
                             is EditMode.AddConnector -> {
@@ -191,17 +202,16 @@ fun DiagramCanvas(
                     }
                     
                     // End resize
-                    if (canvasState.isResizing) {
+                    if (isResizingShape) {
                         dragStartShape?.let { original ->
                             canvasState.selectedShapeId?.let { shapeId ->
                                 viewModel.finishResizeShape(shapeId, original)
                             }
                         }
-                        canvasState.stopResizing()
                     }
                     
-                    // End drag
-                    if (canvasState.isDragging && canvasState.editMode == EditMode.Select) {
+                    // End shape drag
+                    if (isDraggingShape) {
                         dragStartShape?.let { original ->
                             canvasState.selectedShapeId?.let { shapeId ->
                                 viewModel.finishMoveShape(shapeId, original)
@@ -209,15 +219,20 @@ fun DiagramCanvas(
                         }
                     }
                     
+                    // Cleanup
                     canvasState.stopDragging()
+                    canvasState.stopResizing()
                     dragStartShape = null
                     pendingConnectorEndPoint = null
-                    activePointerId = null
+                    isDraggingShape = false
+                    isResizingShape = false
+                    currentResizeHandle = null
                 }
             }
     ) {
         val scale = canvasState.scale
         val offset = canvasState.offset
+        val shapesMap = viewModel.getShapesMap()
 
         // Draw grid
         if (canvasState.showGrid) {
@@ -304,14 +319,14 @@ fun DiagramCanvas(
                 }
             }
 
-            // Draw handles for selected shape (larger for touch)
+            // Draw resize handles for selected shape
             if (isSelected) {
-                drawResizeHandles(shape, scale, offset, handleSize = 20f)
+                drawResizeHandles(shape, scale, offset, handleSize = 24f)
             }
 
             // Draw anchor points in connector mode
             if (canvasState.editMode == EditMode.AddConnector) {
-                drawAnchorPoints(shape, scale, offset, anchorSize = 16f)
+                drawAnchorPoints(shape, scale, offset, anchorSize = 18f)
             }
         }
     }
