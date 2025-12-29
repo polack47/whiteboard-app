@@ -28,9 +28,6 @@ class EditorViewModel(
     var showTextEditor by mutableStateOf(false)
     var editingText by mutableStateOf("")
 
-    private val shapesMapInternalInternal: Map<String, DiagramShape>
-    get() = diagram.shapes.associateBy { it.id }
-
     init {
         if (diagramId != null) {
             loadDiagram(diagramId)
@@ -62,7 +59,6 @@ class EditorViewModel(
         diagram = diagram.copy(name = name)
     }
 
-    // Shape operations
     fun addShape(type: ShapeType, position: Offset) {
         val snappedPos = canvasState.snapToGridIfEnabled(position)
         val newShape = DiagramShape(
@@ -81,24 +77,30 @@ class EditorViewModel(
     }
 
     fun moveShape(shapeId: String, newPosition: Offset) {
-        val shape = shapesMapInternal[shapeId] ?: return
-        val snappedPos = canvasState.snapToGridIfEnabled(newPosition)
+        val shapeIndex = diagram.shapes.indexOfFirst { it.id == shapeId }
+        if (shapeIndex == -1) return
         
+        val shape = diagram.shapes[shapeIndex]
+        val snappedPos = canvasState.snapToGridIfEnabled(newPosition)
         val updatedShape = shape.copy(x = snappedPos.x, y = snappedPos.y)
-        diagram = diagram.copy(
-            shapes = diagram.shapes.map { if (it.id == shapeId) updatedShape else it }
-        )
+        
+        val newShapes = diagram.shapes.toMutableList()
+        newShapes[shapeIndex] = updatedShape
+        diagram = diagram.copy(shapes = newShapes)
     }
 
     fun finishMoveShape(shapeId: String, originalShape: DiagramShape) {
-        val newShape = shapesMapInternal[shapeId] ?: return
+        val newShape = diagram.shapes.find { it.id == shapeId } ?: return
         if (originalShape.x != newShape.x || originalShape.y != newShape.y) {
             undoRedoManager.recordAction(DiagramAction.ModifyShape(originalShape, newShape))
         }
     }
 
     fun resizeShape(shapeId: String, handle: ResizeHandle, delta: Offset) {
-        val shape = shapesMapInternal[shapeId] ?: return
+        val shapeIndex = diagram.shapes.indexOfFirst { it.id == shapeId }
+        if (shapeIndex == -1) return
+        
+        val shape = diagram.shapes[shapeIndex]
         
         var newX = shape.x
         var newY = shape.y
@@ -142,7 +144,6 @@ class EditorViewModel(
             }
         }
 
-        // Ensure minimum size
         val minSize = canvasState.gridSize
         if (newWidth < minSize) {
             if (handle in listOf(ResizeHandle.LEFT, ResizeHandle.TOP_LEFT, ResizeHandle.BOTTOM_LEFT)) {
@@ -157,55 +158,57 @@ class EditorViewModel(
             newHeight = minSize
         }
 
-        // Snap to grid
         newX = canvasState.snapToGridIfEnabled(Offset(newX, 0f)).x
         newY = canvasState.snapToGridIfEnabled(Offset(0f, newY)).y
         newWidth = canvasState.snapSizeToGrid(newWidth)
         newHeight = canvasState.snapSizeToGrid(newHeight)
 
         val updatedShape = shape.copy(x = newX, y = newY, width = newWidth, height = newHeight)
-        diagram = diagram.copy(
-            shapes = diagram.shapes.map { if (it.id == shapeId) updatedShape else it }
-        )
+        val newShapes = diagram.shapes.toMutableList()
+        newShapes[shapeIndex] = updatedShape
+        diagram = diagram.copy(shapes = newShapes)
     }
 
     fun finishResizeShape(shapeId: String, originalShape: DiagramShape) {
-        val newShape = shapesMapInternal[shapeId] ?: return
+        val newShape = diagram.shapes.find { it.id == shapeId } ?: return
         if (originalShape != newShape) {
             undoRedoManager.recordAction(DiagramAction.ModifyShape(originalShape, newShape))
         }
     }
 
     fun updateShapeText(shapeId: String, text: String) {
-        val shape = shapesMapInternal[shapeId] ?: return
-        val oldShape = shape
+        val shapeIndex = diagram.shapes.indexOfFirst { it.id == shapeId }
+        if (shapeIndex == -1) return
+        
+        val shape = diagram.shapes[shapeIndex]
         val newShape = shape.copy(text = text)
         
-        diagram = diagram.copy(
-            shapes = diagram.shapes.map { if (it.id == shapeId) newShape else it }
-        )
-        undoRedoManager.recordAction(DiagramAction.ModifyShape(oldShape, newShape))
+        val newShapes = diagram.shapes.toMutableList()
+        newShapes[shapeIndex] = newShape
+        diagram = diagram.copy(shapes = newShapes)
+        undoRedoManager.recordAction(DiagramAction.ModifyShape(shape, newShape))
     }
 
     fun updateShapeColor(shapeId: String, fillColor: Color, strokeColor: Color) {
-        val shape = shapesMapInternal[shapeId] ?: return
-        val oldShape = shape
+        val shapeIndex = diagram.shapes.indexOfFirst { it.id == shapeId }
+        if (shapeIndex == -1) return
+        
+        val shape = diagram.shapes[shapeIndex]
         val newShape = shape.copy(
             fillColor = fillColor.toArgb(),
             strokeColor = strokeColor.toArgb()
         )
         
-        diagram = diagram.copy(
-            shapes = diagram.shapes.map { if (it.id == shapeId) newShape else it }
-        )
-        undoRedoManager.recordAction(DiagramAction.ModifyShape(oldShape, newShape))
+        val newShapes = diagram.shapes.toMutableList()
+        newShapes[shapeIndex] = newShape
+        diagram = diagram.copy(shapes = newShapes)
+        undoRedoManager.recordAction(DiagramAction.ModifyShape(shape, newShape))
     }
 
     fun deleteSelectedShape() {
         val shapeId = canvasState.selectedShapeId ?: return
-        val shape = shapesMapInternal[shapeId] ?: return
+        val shape = diagram.shapes.find { it.id == shapeId } ?: return
         
-        // Also remove connected connectors
         val connectedConnectors = diagram.connectors.filter { 
             it.startShapeId == shapeId || it.endShapeId == shapeId 
         }
@@ -225,7 +228,6 @@ class EditorViewModel(
         canvasState.clearSelection()
     }
 
-    // Connector operations
     fun startConnector(shapeId: String, anchor: AnchorPoint) {
         canvasState.startConnector(shapeId, anchor)
     }
@@ -233,7 +235,6 @@ class EditorViewModel(
     fun completeConnector(endShapeId: String, endAnchor: AnchorPoint) {
         val start = canvasState.completePendingConnector() ?: return
         
-        // Don't connect to same shape
         if (start.first == endShapeId) return
         
         val newConnector = Connector(
@@ -252,25 +253,29 @@ class EditorViewModel(
     }
 
     fun updateConnectorStyle(connectorId: String, style: ConnectorStyle) {
-        val connector = diagram.connectors.find { it.id == connectorId } ?: return
-        val oldConnector = connector
+        val connectorIndex = diagram.connectors.indexOfFirst { it.id == connectorId }
+        if (connectorIndex == -1) return
+        
+        val connector = diagram.connectors[connectorIndex]
         val newConnector = connector.copy(style = style)
         
-        diagram = diagram.copy(
-            connectors = diagram.connectors.map { if (it.id == connectorId) newConnector else it }
-        )
-        undoRedoManager.recordAction(DiagramAction.ModifyConnector(oldConnector, newConnector))
+        val newConnectors = diagram.connectors.toMutableList()
+        newConnectors[connectorIndex] = newConnector
+        diagram = diagram.copy(connectors = newConnectors)
+        undoRedoManager.recordAction(DiagramAction.ModifyConnector(connector, newConnector))
     }
 
     fun updateConnectorArrowHead(connectorId: String, arrowHead: ArrowHead) {
-        val connector = diagram.connectors.find { it.id == connectorId } ?: return
-        val oldConnector = connector
+        val connectorIndex = diagram.connectors.indexOfFirst { it.id == connectorId }
+        if (connectorIndex == -1) return
+        
+        val connector = diagram.connectors[connectorIndex]
         val newConnector = connector.copy(arrowHead = arrowHead)
         
-        diagram = diagram.copy(
-            connectors = diagram.connectors.map { if (it.id == connectorId) newConnector else it }
-        )
-        undoRedoManager.recordAction(DiagramAction.ModifyConnector(oldConnector, newConnector))
+        val newConnectors = diagram.connectors.toMutableList()
+        newConnectors[connectorIndex] = newConnector
+        diagram = diagram.copy(connectors = newConnectors)
+        undoRedoManager.recordAction(DiagramAction.ModifyConnector(connector, newConnector))
     }
 
     fun deleteSelectedConnector() {
@@ -284,7 +289,6 @@ class EditorViewModel(
         canvasState.clearSelection()
     }
 
-    // Undo/Redo
     fun undo() {
         diagram = undoRedoManager.undo(diagram)
     }
@@ -293,7 +297,6 @@ class EditorViewModel(
         diagram = undoRedoManager.redo(diagram)
     }
 
-    // Hit testing
     fun findShapeAt(canvasPoint: Offset): DiagramShape? {
         return diagram.shapes
             .sortedByDescending { it.zIndex }
@@ -301,9 +304,10 @@ class EditorViewModel(
     }
 
     fun findConnectorNear(canvasPoint: Offset, threshold: Float = 15f): Connector? {
+        val shapesMap = diagram.shapes.associateBy { it.id }
         return diagram.connectors.firstOrNull { connector ->
-            val start = connector.getStartPosition(shapesMapInternal)
-            val end = connector.getEndPosition(shapesMapInternal)
+            val start = connector.getStartPosition(shapesMap)
+            val end = connector.getEndPosition(shapesMap)
             if (start != null && end != null) {
                 pointToLineDistance(canvasPoint, start, end) < threshold
             } else {
@@ -327,5 +331,5 @@ class EditorViewModel(
         return (point - projection).getDistance()
     }
 
-    fun getShapesMap(): Map<String, DiagramShape> = shapesMapInternal
+    fun getShapesMap(): Map<String, DiagramShape> = diagram.shapes.associateBy { it.id }
 }
