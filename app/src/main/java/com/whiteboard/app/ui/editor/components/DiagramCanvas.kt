@@ -18,6 +18,8 @@ import androidx.compose.ui.input.pointer.positionChanged
 import android.graphics.Paint
 import com.whiteboard.app.data.model.*
 import com.whiteboard.app.ui.editor.EditorViewModel
+import kotlin.math.max
+import kotlin.math.min
 
 @Composable
 fun DiagramCanvas(
@@ -101,6 +103,7 @@ fun DiagramCanvas(
                         else if (pointers.size == 1 && !isMultiTouch) {
                             val change = pointers.first()
                             val currentPos = change.position
+                            val currentCanvasPos = canvasState.screenToCanvas(currentPos)
                             val delta = currentPos - lastPosition
                             totalDrag += delta
                             
@@ -119,10 +122,10 @@ fun DiagramCanvas(
                             // Handle ongoing movement
                             if (hasMoved && change.positionChanged()) {
                                 when {
-                                    // Resizing shape
+                                    // Resizing shape - use absolute finger position
                                     isResizingShape && currentResizeHandle != null -> {
                                         canvasState.selectedShapeId?.let { shapeId ->
-                                            viewModel.resizeShape(shapeId, currentResizeHandle!!, delta, canvasState.scale)
+                                            viewModel.resizeShapeToPosition(shapeId, currentResizeHandle!!, currentCanvasPos)
                                         }
                                         change.consume()
                                     }
@@ -147,7 +150,7 @@ fun DiagramCanvas(
                                     }
                                     // Connector mode
                                     canvasState.editMode == EditMode.AddConnector && canvasState.pendingConnectorStart != null -> {
-                                        pendingConnectorEndPoint = canvasState.screenToCanvas(currentPos)
+                                        pendingConnectorEndPoint = currentCanvasPos
                                         change.consume()
                                     }
                                 }
@@ -280,36 +283,67 @@ fun DiagramCanvas(
                 isSelected = isSelected
             )
 
-            // Draw text
+            // Draw text - auto-sizing to fit shape
             if (shape.text.isNotEmpty()) {
                 drawContext.canvas.nativeCanvas.apply {
-                    val textPaint = Paint().apply {
-                        color = shape.textColor
-                        textSize = 14f * scale
-                        textAlign = Paint.Align.CENTER
-                        isAntiAlias = true
-                    }
+                    val shapeScreenWidth = shape.width * scale * 0.85f
+                    val shapeScreenHeight = shape.height * scale * 0.7f
                     
                     val centerX = shape.x * scale + offset.x + shape.width * scale / 2
                     val centerY = shape.y * scale + offset.y + shape.height * scale / 2
                     
-                    val maxWidth = shape.width * scale * 0.9f
-                    val words = shape.text.split(" ")
-                    val lines = mutableListOf<String>()
-                    var currentLine = ""
+                    // Calculate optimal font size
+                    val baseFontSize = 16f * scale
+                    val minFontSize = 6f * scale
+                    var fontSize = baseFontSize
                     
-                    words.forEach { word ->
-                        val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
-                        if (textPaint.measureText(testLine) <= maxWidth) {
-                            currentLine = testLine
-                        } else {
-                            if (currentLine.isNotEmpty()) lines.add(currentLine)
-                            currentLine = word
-                        }
+                    val textPaint = Paint().apply {
+                        color = shape.textColor
+                        textSize = fontSize
+                        textAlign = Paint.Align.CENTER
+                        isAntiAlias = true
                     }
-                    if (currentLine.isNotEmpty()) lines.add(currentLine)
                     
-                    val lineHeight = textPaint.textSize * 1.2f
+                    // Function to wrap text and calculate dimensions
+                    fun wrapText(text: String, maxWidth: Float, paint: Paint): List<String> {
+                        val words = text.split(" ")
+                        val lines = mutableListOf<String>()
+                        var currentLine = ""
+                        
+                        words.forEach { word ->
+                            val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
+                            if (paint.measureText(testLine) <= maxWidth) {
+                                currentLine = testLine
+                            } else {
+                                if (currentLine.isNotEmpty()) lines.add(currentLine)
+                                currentLine = word
+                                // If single word is too long, add it anyway
+                                if (paint.measureText(word) > maxWidth) {
+                                    lines.add(currentLine)
+                                    currentLine = ""
+                                }
+                            }
+                        }
+                        if (currentLine.isNotEmpty()) lines.add(currentLine)
+                        return lines
+                    }
+                    
+                    // Reduce font size until text fits
+                    var lines: List<String>
+                    do {
+                        textPaint.textSize = fontSize
+                        lines = wrapText(shape.text, shapeScreenWidth, textPaint)
+                        val totalTextHeight = lines.size * fontSize * 1.2f
+                        
+                        if (totalTextHeight <= shapeScreenHeight && 
+                            lines.all { textPaint.measureText(it) <= shapeScreenWidth }) {
+                            break
+                        }
+                        fontSize -= 1f
+                    } while (fontSize > minFontSize)
+                    
+                    // Draw the text
+                    val lineHeight = fontSize * 1.2f
                     val totalHeight = lines.size * lineHeight
                     val startY = centerY - totalHeight / 2 + lineHeight * 0.7f
                     
