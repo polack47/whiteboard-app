@@ -21,14 +21,20 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+    - name: Create Gradle Wrapper
+      run: |
+        mkdir -p gradle/wrapper
+        echo 'distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
+        zipStoreBase=GRADLE_USER_HOME
+        zipStorePath=wrapper/dists' > gradle/wrapper/gradle-wrapper.properties
 
-    - name: Build Debug APK
+    - name: Build with Gradle
       run: |
         gradle wrapper
         chmod +x gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug --no-daemon --stacktrace
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
