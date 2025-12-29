@@ -248,8 +248,8 @@ fun ZoomControls(
         }
 
         IconButton(onClick = {
-            canvasState.setScale(1f)
-            canvasState.setOffset(androidx.compose.ui.geometry.Offset.Zero)
+            canvasState.updateScale(1f)
+            canvasState.updateOffset(androidx.compose.ui.geometry.Offset.Zero)
         }) {
             Icon(Icons.Default.FitScreen, "Reset View")
         }
