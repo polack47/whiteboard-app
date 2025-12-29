@@ -11,6 +11,8 @@ import androidx.lifecycle.viewModelScope
 import com.whiteboard.app.data.model.*
 import com.whiteboard.app.data.repository.DiagramRepository
 import kotlinx.coroutines.launch
+import kotlin.math.max
+import kotlin.math.min
 
 class EditorViewModel(
     private val repository: DiagramRepository,
@@ -27,6 +29,10 @@ class EditorViewModel(
     var showColorPicker by mutableStateOf(false)
     var showTextEditor by mutableStateOf(false)
     var editingText by mutableStateOf("")
+
+    companion object {
+        const val MIN_SHAPE_SIZE = 30f
+    }
 
     init {
         if (diagramId != null) {
@@ -96,82 +102,74 @@ class EditorViewModel(
         }
     }
 
-    // Resize with screen delta and scale - fixed direction and sensitivity
-    fun resizeShape(shapeId: String, handle: ResizeHandle, screenDelta: Offset, scale: Float) {
+    // Resize using absolute finger position on canvas
+    fun resizeShapeToPosition(shapeId: String, handle: ResizeHandle, fingerPos: Offset) {
         val shapeIndex = diagram.shapes.indexOfFirst { it.id == shapeId }
         if (shapeIndex == -1) return
         
         val shape = diagram.shapes[shapeIndex]
-        
-        // Convert screen delta to canvas delta with reduced sensitivity
-        val sensitivity = 0.4f
-        val delta = Offset(
-            screenDelta.x / scale * sensitivity,
-            screenDelta.y / scale * sensitivity
-        )
         
         var newX = shape.x
         var newY = shape.y
         var newWidth = shape.width
         var newHeight = shape.height
         
-        val minSize = 40f
-
+        // The finger position directly determines where the handle should be
         when (handle) {
             ResizeHandle.TOP_LEFT -> {
-                val maxDeltaX = newWidth - minSize
-                val maxDeltaY = newHeight - minSize
-                val clampedDeltaX = delta.x.coerceIn(-1000f, maxDeltaX)
-                val clampedDeltaY = delta.y.coerceIn(-1000f, maxDeltaY)
-                newX += clampedDeltaX
-                newY += clampedDeltaY
-                newWidth -= clampedDeltaX
-                newHeight -= clampedDeltaY
+                // Finger is at top-left corner
+                // Right and bottom edges stay fixed
+                val right = shape.x + shape.width
+                val bottom = shape.y + shape.height
+                
+                newX = min(fingerPos.x, right - MIN_SHAPE_SIZE)
+                newY = min(fingerPos.y, bottom - MIN_SHAPE_SIZE)
+                newWidth = right - newX
+                newHeight = bottom - newY
             }
             ResizeHandle.TOP -> {
-                val maxDeltaY = newHeight - minSize
-                val clampedDeltaY = delta.y.coerceIn(-1000f, maxDeltaY)
-                newY += clampedDeltaY
-                newHeight -= clampedDeltaY
+                // Finger controls top edge, others stay fixed
+                val bottom = shape.y + shape.height
+                newY = min(fingerPos.y, bottom - MIN_SHAPE_SIZE)
+                newHeight = bottom - newY
             }
             ResizeHandle.TOP_RIGHT -> {
-                val maxDeltaY = newHeight - minSize
-                val clampedDeltaY = delta.y.coerceIn(-1000f, maxDeltaY)
-                newY += clampedDeltaY
-                newWidth += delta.x
-                newHeight -= clampedDeltaY
+                // Left and bottom edges stay fixed
+                val left = shape.x
+                val bottom = shape.y + shape.height
+                
+                newY = min(fingerPos.y, bottom - MIN_SHAPE_SIZE)
+                newWidth = max(fingerPos.x - left, MIN_SHAPE_SIZE)
+                newHeight = bottom - newY
             }
             ResizeHandle.LEFT -> {
-                val maxDeltaX = newWidth - minSize
-                val clampedDeltaX = delta.x.coerceIn(-1000f, maxDeltaX)
-                newX += clampedDeltaX
-                newWidth -= clampedDeltaX
+                // Right edge stays fixed
+                val right = shape.x + shape.width
+                newX = min(fingerPos.x, right - MIN_SHAPE_SIZE)
+                newWidth = right - newX
             }
             ResizeHandle.RIGHT -> {
-                newWidth += delta.x
+                // Left edge stays fixed
+                newWidth = max(fingerPos.x - shape.x, MIN_SHAPE_SIZE)
             }
             ResizeHandle.BOTTOM_LEFT -> {
-                val maxDeltaX = newWidth - minSize
-                val clampedDeltaX = delta.x.coerceIn(-1000f, maxDeltaX)
-                newX += clampedDeltaX
-                newWidth -= clampedDeltaX
-                newHeight += delta.y
+                // Right and top edges stay fixed
+                val right = shape.x + shape.width
+                val top = shape.y
+                
+                newX = min(fingerPos.x, right - MIN_SHAPE_SIZE)
+                newWidth = right - newX
+                newHeight = max(fingerPos.y - top, MIN_SHAPE_SIZE)
             }
             ResizeHandle.BOTTOM -> {
-                newHeight += delta.y
+                // Top edge stays fixed
+                newHeight = max(fingerPos.y - shape.y, MIN_SHAPE_SIZE)
             }
             ResizeHandle.BOTTOM_RIGHT -> {
-                newWidth += delta.x
-                newHeight += delta.y
+                // Left and top edges stay fixed
+                newWidth = max(fingerPos.x - shape.x, MIN_SHAPE_SIZE)
+                newHeight = max(fingerPos.y - shape.y, MIN_SHAPE_SIZE)
             }
-        }
-
-        // Enforce minimum size
-        if (newWidth < minSize) {
-            newWidth = minSize
-        }
-        if (newHeight < minSize) {
-            newHeight = minSize
         }
 
         val updatedShape = shape.copy(x = newX, y = newY, width = newWidth, height = newHeight)
