@@ -96,43 +96,65 @@ class EditorViewModel(
         }
     }
 
-    fun resizeShape(shapeId: String, handle: ResizeHandle, delta: Offset) {
+    // Resize with screen delta and scale - fixed direction and sensitivity
+    fun resizeShape(shapeId: String, handle: ResizeHandle, screenDelta: Offset, scale: Float) {
         val shapeIndex = diagram.shapes.indexOfFirst { it.id == shapeId }
         if (shapeIndex == -1) return
         
         val shape = diagram.shapes[shapeIndex]
         
+        // Convert screen delta to canvas delta with reduced sensitivity
+        val sensitivity = 0.4f
+        val delta = Offset(
+            screenDelta.x / scale * sensitivity,
+            screenDelta.y / scale * sensitivity
+        )
+        
         var newX = shape.x
         var newY = shape.y
         var newWidth = shape.width
         var newHeight = shape.height
+        
+        val minSize = 40f
 
         when (handle) {
             ResizeHandle.TOP_LEFT -> {
-                newX += delta.x
-                newY += delta.y
-                newWidth -= delta.x
-                newHeight -= delta.y
+                val maxDeltaX = newWidth - minSize
+                val maxDeltaY = newHeight - minSize
+                val clampedDeltaX = delta.x.coerceIn(-1000f, maxDeltaX)
+                val clampedDeltaY = delta.y.coerceIn(-1000f, maxDeltaY)
+                newX += clampedDeltaX
+                newY += clampedDeltaY
+                newWidth -= clampedDeltaX
+                newHeight -= clampedDeltaY
             }
             ResizeHandle.TOP -> {
-                newY += delta.y
-                newHeight -= delta.y
+                val maxDeltaY = newHeight - minSize
+                val clampedDeltaY = delta.y.coerceIn(-1000f, maxDeltaY)
+                newY += clampedDeltaY
+                newHeight -= clampedDeltaY
             }
             ResizeHandle.TOP_RIGHT -> {
-                newY += delta.y
+                val maxDeltaY = newHeight - minSize
+                val clampedDeltaY = delta.y.coerceIn(-1000f, maxDeltaY)
+                newY += clampedDeltaY
                 newWidth += delta.x
-                newHeight -= delta.y
+                newHeight -= clampedDeltaY
             }
             ResizeHandle.LEFT -> {
-                newX += delta.x
-                newWidth -= delta.x
+                val maxDeltaX = newWidth - minSize
+                val clampedDeltaX = delta.x.coerceIn(-1000f, maxDeltaX)
+                newX += clampedDeltaX
+                newWidth -= clampedDeltaX
             }
             ResizeHandle.RIGHT -> {
                 newWidth += delta.x
             }
             ResizeHandle.BOTTOM_LEFT -> {
-                newX += delta.x
-                newWidth -= delta.x
+                val maxDeltaX = newWidth - minSize
+                val clampedDeltaX = delta.x.coerceIn(-1000f, maxDeltaX)
+                newX += clampedDeltaX
+                newWidth -= clampedDeltaX
                 newHeight += delta.y
             }
             ResizeHandle.BOTTOM -> {
@@ -144,24 +166,13 @@ class EditorViewModel(
             }
         }
 
-        val minSize = canvasState.gridSize
+        // Enforce minimum size
         if (newWidth < minSize) {
-            if (handle in listOf(ResizeHandle.LEFT, ResizeHandle.TOP_LEFT, ResizeHandle.BOTTOM_LEFT)) {
-                newX = shape.x + shape.width - minSize
-            }
             newWidth = minSize
         }
         if (newHeight < minSize) {
-            if (handle in listOf(ResizeHandle.TOP, ResizeHandle.TOP_LEFT, ResizeHandle.TOP_RIGHT)) {
-                newY = shape.y + shape.height - minSize
-            }
             newHeight = minSize
         }
-
-        newX = canvasState.snapToGridIfEnabled(Offset(newX, 0f)).x
-        newY = canvasState.snapToGridIfEnabled(Offset(0f, newY)).y
-        newWidth = canvasState.snapSizeToGrid(newWidth)
-        newHeight = canvasState.snapSizeToGrid(newHeight)
 
         val updatedShape = shape.copy(x = newX, y = newY, width = newWidth, height = newHeight)
         val newShapes = diagram.shapes.toMutableList()
@@ -172,7 +183,22 @@ class EditorViewModel(
     fun finishResizeShape(shapeId: String, originalShape: DiagramShape) {
         val newShape = diagram.shapes.find { it.id == shapeId } ?: return
         if (originalShape != newShape) {
-            undoRedoManager.recordAction(DiagramAction.ModifyShape(originalShape, newShape))
+            // Snap final position/size to grid
+            val snappedShape = newShape.copy(
+                x = canvasState.snapToGridIfEnabled(Offset(newShape.x, 0f)).x,
+                y = canvasState.snapToGridIfEnabled(Offset(0f, newShape.y)).y,
+                width = canvasState.snapSizeToGrid(newShape.width),
+                height = canvasState.snapSizeToGrid(newShape.height)
+            )
+            
+            val shapeIndex = diagram.shapes.indexOfFirst { it.id == shapeId }
+            if (shapeIndex != -1) {
+                val newShapes = diagram.shapes.toMutableList()
+                newShapes[shapeIndex] = snappedShape
+                diagram = diagram.copy(shapes = newShapes)
+            }
+            
+            undoRedoManager.recordAction(DiagramAction.ModifyShape(originalShape, snappedShape))
         }
     }
 
@@ -303,7 +329,7 @@ class EditorViewModel(
             .firstOrNull { it.containsPoint(canvasPoint) }
     }
 
-    fun findConnectorNear(canvasPoint: Offset, threshold: Float = 15f): Connector? {
+    fun findConnectorNear(canvasPoint: Offset, threshold: Float = 20f): Connector? {
         val shapesMap = diagram.shapes.associateBy { it.id }
         return diagram.connectors.firstOrNull { connector ->
             val start = connector.getStartPosition(shapesMap)
