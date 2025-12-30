@@ -259,48 +259,48 @@ fun ConnectorStyleDialog(
                 Text("Connector Style", style = MaterialTheme.typography.titleLarge)
 
                 Text("Line Style", style = MaterialTheme.typography.titleSmall)
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    ConnectorStyle.entries.forEachIndexed { index, style ->
-                        SegmentedButton(
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ConnectorStyle.entries.forEach { style ->
+                        FilterChip(
                             selected = connector.style == style,
                             onClick = { viewModel.updateConnectorStyle(connector.id, style) },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = ConnectorStyle.entries.size
-                            )
-                        ) {
-                            Text(
-                                when (style) {
-                                    ConnectorStyle.STRAIGHT -> "Straight"
-                                    ConnectorStyle.ORTHOGONAL -> "Ortho"
-                                    ConnectorStyle.BEZIER -> "Curve"
-                                },
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
+                            label = {
+                                Text(
+                                    when (style) {
+                                        ConnectorStyle.STRAIGHT -> "Straight"
+                                        ConnectorStyle.ORTHOGONAL -> "Ortho"
+                                        ConnectorStyle.BEZIER -> "Curve"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        )
                     }
                 }
 
                 Text("Arrow Head", style = MaterialTheme.typography.titleSmall)
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    ArrowHead.entries.forEachIndexed { index, arrow ->
-                        SegmentedButton(
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ArrowHead.entries.forEach { arrow ->
+                        FilterChip(
                             selected = connector.arrowHead == arrow,
                             onClick = { viewModel.updateConnectorArrowHead(connector.id, arrow) },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = ArrowHead.entries.size
-                            )
-                        ) {
-                            Text(
-                                when (arrow) {
-                                    ArrowHead.NONE -> "None"
-                                    ArrowHead.END -> "End"
-                                    ArrowHead.BOTH -> "Both"
-                                },
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
+                            label = {
+                                Text(
+                                    when (arrow) {
+                                        ArrowHead.NONE -> "None"
+                                        ArrowHead.SINGLE -> "End"
+                                        ArrowHead.DOUBLE -> "Both"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        )
                     }
                 }
 
