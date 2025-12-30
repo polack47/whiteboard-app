@@ -1,3 +1,4 @@
+import com.whiteboard.app.ui.editor.EditorViewModel
 @Composable
 fun ColorPickerDialog(
     viewModel: EditorViewModel,
