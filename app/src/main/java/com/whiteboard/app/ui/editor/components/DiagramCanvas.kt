@@ -35,11 +35,13 @@ fun DiagramCanvas(
     var isDraggingShape by remember { mutableStateOf(false) }
     var isResizingShape by remember { mutableStateOf(false) }
 
+    // Sadece editMode değiştiğinde gesture'ı yeniden başlat
+    // diagram.shapes'i key'den çıkardık - bu resize takılmasını düzeltiyor
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFFAFAFA))
-            .pointerInput(canvasState.editMode, canvasState.selectedShapeId, diagram.shapes) {
+            .pointerInput(canvasState.editMode) {
                 awaitEachGesture {
                     val firstDown = awaitFirstDown(requireUnconsumed = false)
                     val firstDownPos = firstDown.position
@@ -56,12 +58,13 @@ fun DiagramCanvas(
                     var lastPosition = firstDownPos
                     var isMultiTouch = false
                     
-                    // Get current shapes map
-                    val shapesMap = viewModel.getShapesMap()
+                    // Get current shapes map at touch start
+                    val initialShapesMap = viewModel.getShapesMap()
                     
                     // Find what we're touching
                     val touchedShape = viewModel.findShapeAt(canvasPos)
-                    val selectedShape = canvasState.selectedShapeId?.let { shapesMap[it] }
+                    val selectedShapeId = canvasState.selectedShapeId
+                    val selectedShape = selectedShapeId?.let { initialShapesMap[it] }
                     
                     // Check if touching resize handle of selected shape
                     if (selectedShape != null && canvasState.editMode == EditMode.Select) {
@@ -119,8 +122,8 @@ fun DiagramCanvas(
                                 }
                             }
                             
-                            // Handle ongoing movement
-                            if (hasMoved && change.positionChanged()) {
+                            // Handle ongoing movement - ALWAYS process if resizing
+                            if ((hasMoved || isResizingShape) && change.positionChanged()) {
                                 when {
                                     // Resizing shape - use absolute finger position
                                     isResizingShape && currentResizeHandle != null -> {
@@ -164,7 +167,7 @@ fun DiagramCanvas(
                     val endCanvasPos = canvasState.screenToCanvas(lastPosition)
                     
                     // Handle tap (no significant movement and no multi-touch)
-                    if (!hasMoved && !isMultiTouch) {
+                    if (!hasMoved && !isMultiTouch && !isResizingShape) {
                         when (val mode = canvasState.editMode) {
                             is EditMode.AddShape -> {
                                 viewModel.addShape(mode.type, endCanvasPos)
@@ -283,7 +286,7 @@ fun DiagramCanvas(
                 isSelected = isSelected
             )
 
-            // Draw text - auto-sizing to fit shape
+            // Draw text with shadow - auto-sizing to fit shape
             if (shape.text.isNotEmpty()) {
                 drawContext.canvas.nativeCanvas.apply {
                     val shapeScreenWidth = shape.width * scale * 0.85f
@@ -297,6 +300,15 @@ fun DiagramCanvas(
                     val minFontSize = 6f * scale
                     var fontSize = baseFontSize
                     
+                    // Shadow paint
+                    val shadowPaint = Paint().apply {
+                        color = android.graphics.Color.argb(100, 0, 0, 0)
+                        textSize = fontSize
+                        textAlign = Paint.Align.CENTER
+                        isAntiAlias = true
+                    }
+                    
+                    // Main text paint
                     val textPaint = Paint().apply {
                         color = shape.textColor
                         textSize = fontSize
@@ -304,7 +316,7 @@ fun DiagramCanvas(
                         isAntiAlias = true
                     }
                     
-                    // Function to wrap text and calculate dimensions
+                    // Function to wrap text
                     fun wrapText(text: String, maxWidth: Float, paint: Paint): List<String> {
                         val words = text.split(" ")
                         val lines = mutableListOf<String>()
@@ -317,7 +329,6 @@ fun DiagramCanvas(
                             } else {
                                 if (currentLine.isNotEmpty()) lines.add(currentLine)
                                 currentLine = word
-                                // If single word is too long, add it anyway
                                 if (paint.measureText(word) > maxWidth) {
                                     lines.add(currentLine)
                                     currentLine = ""
@@ -332,6 +343,7 @@ fun DiagramCanvas(
                     var lines: List<String>
                     do {
                         textPaint.textSize = fontSize
+                        shadowPaint.textSize = fontSize
                         lines = wrapText(shape.text, shapeScreenWidth, textPaint)
                         val totalTextHeight = lines.size * fontSize * 1.2f
                         
@@ -342,20 +354,25 @@ fun DiagramCanvas(
                         fontSize -= 1f
                     } while (fontSize > minFontSize)
                     
-                    // Draw the text
+                    // Draw the text with shadow
                     val lineHeight = fontSize * 1.2f
                     val totalHeight = lines.size * lineHeight
                     val startY = centerY - totalHeight / 2 + lineHeight * 0.7f
+                    val shadowOffset = max(1f, fontSize * 0.06f)
                     
                     lines.forEachIndexed { index, line ->
-                        drawText(line, centerX, startY + index * lineHeight, textPaint)
+                        val y = startY + index * lineHeight
+                        // Draw shadow first
+                        drawText(line, centerX + shadowOffset, y + shadowOffset, shadowPaint)
+                        // Draw main text
+                        drawText(line, centerX, y, textPaint)
                     }
                 }
             }
 
             // Draw resize handles for selected shape
             if (isSelected) {
-                drawResizeHandles(shape, scale, offset, handleSize = 24f)
+                drawResizeHandles(shape, scale, offset, handleSize = 28f)
             }
 
             // Draw anchor points in connector mode
