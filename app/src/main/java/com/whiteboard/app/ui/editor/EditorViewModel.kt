@@ -219,8 +219,7 @@ class EditorViewModel(
         if (shapeIndex == -1) return
         
         val shape = diagram.shapes[shapeIndex]
-        val newShape = shape.copy
-        (
+        val newShape = shape.copy(
             fillColor = fillColor.toArgb(),
             strokeColor = strokeColor.toArgb(),
             textColor = textColor.toArgb()
