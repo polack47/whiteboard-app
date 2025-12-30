@@ -1,4 +1,66 @@
+package com.whiteboard.app.ui.editor.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import com.whiteboard.app.data.model.*
 import com.whiteboard.app.ui.editor.EditorViewModel
+
+@Composable
+fun TextEditorDialog(
+    viewModel: EditorViewModel,
+    onDismiss: () -> Unit
+) {
+    val selectedShape = viewModel.canvasState.selectedShapeId?.let { id ->
+        viewModel.diagram.shapes.find { it.id == id }
+    } ?: return
+    
+    var text by remember { mutableStateOf(selectedShape.text) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Text") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Text") },
+                maxLines = 5
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { 
+                viewModel.updateShapeText(selectedShape.id, text)
+                onDismiss() 
+            }) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
 @Composable
 fun ColorPickerDialog(
     viewModel: EditorViewModel,
@@ -41,7 +103,6 @@ fun ColorPickerDialog(
             ) {
                 Text("Colors", style = MaterialTheme.typography.titleLarge)
 
-                // Tabs
                 TabRow(selectedTabIndex = activeTab) {
                     Tab(
                         selected = activeTab == 0,
@@ -62,7 +123,6 @@ fun ColorPickerDialog(
 
                 when (activeTab) {
                     0, 1 -> {
-                        // Fill or Stroke color grid
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(8),
                             modifier = Modifier.height(180.dp),
@@ -100,7 +160,6 @@ fun ColorPickerDialog(
                         }
                     }
                     2 -> {
-                        // Text color - only black and white
                         Text("Text Color", style = MaterialTheme.typography.bodyMedium)
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -135,7 +194,6 @@ fun ColorPickerDialog(
                     }
                 }
 
-                // Preview
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -152,7 +210,6 @@ fun ColorPickerDialog(
                     )
                 }
 
-                // Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
@@ -178,4 +235,84 @@ private fun Color.luminance(): Float {
     val g = green
     val b = blue
     return 0.299f * r + 0.587f * g + 0.114f * b
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ConnectorStyleDialog(
+    viewModel: EditorViewModel,
+    onDismiss: () -> Unit
+) {
+    val connector = viewModel.canvasState.selectedConnectorId?.let { id ->
+        viewModel.diagram.connectors.find { it.id == id }
+    } ?: return
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Connector Style", style = MaterialTheme.typography.titleLarge)
+
+                Text("Line Style", style = MaterialTheme.typography.titleSmall)
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    ConnectorStyle.entries.forEachIndexed { index, style ->
+                        SegmentedButton(
+                            selected = connector.style == style,
+                            onClick = { viewModel.updateConnectorStyle(connector.id, style) },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = ConnectorStyle.entries.size
+                            )
+                        ) {
+                            Text(
+                                when (style) {
+                                    ConnectorStyle.STRAIGHT -> "Straight"
+                                    ConnectorStyle.ORTHOGONAL -> "Ortho"
+                                    ConnectorStyle.BEZIER -> "Curve"
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+
+                Text("Arrow Head", style = MaterialTheme.typography.titleSmall)
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    ArrowHead.entries.forEachIndexed { index, arrow ->
+                        SegmentedButton(
+                            selected = connector.arrowHead == arrow,
+                            onClick = { viewModel.updateConnectorArrowHead(connector.id, arrow) },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = ArrowHead.entries.size
+                            )
+                        ) {
+                            Text(
+                                when (arrow) {
+                                    ArrowHead.NONE -> "None"
+                                    ArrowHead.END -> "End"
+                                    ArrowHead.BOTH -> "Both"
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Close")
+                    }
+                }
+            }
+        }
+    }
 }
