@@ -213,10 +213,10 @@ class EditorViewModel(
         undoRedoManager.recordAction(DiagramAction.ModifyShape(shape, newShape))
     }
 
-    fun updateShapeColor(shapeId: String, fillColor: Color, strokeColor: Color, textColor: Color) {
+        fun updateShapeColor(shapeId: String, fillColor: Color, strokeColor: Color, textColor: Color) {
         val shapeIndex = diagram.shapes.indexOfFirst { it.id == shapeId }
         if (shapeIndex == -1) return
-    
+        
         val shape = diagram.shapes[shapeIndex]
         val newShape = shape.copy(
             fillColor = fillColor.toArgb(),
