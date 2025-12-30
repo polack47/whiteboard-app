@@ -1,5 +1,5 @@
 package com.whiteboard.app.ui.editor.components
-import androidx.compose.material3.ExperimentalMaterial3Api
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,27 +9,26 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
-import com.whiteboard.app.ui.editor.EditorViewModel
+import androidx.compose.ui.window.Dialog
+import com.whiteboard.app.data.model.*
 
 @Composable
 fun TextEditorDialog(
-    viewModel: EditorViewModel,
-    onDismiss: () -> Unit
+    initialText: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
 ) {
-    val shapeId = viewModel.canvasState.selectedShapeId
-    if (shapeId == null) {
-        onDismiss()
-        return
-    }
-
-    var text by remember { mutableStateOf(viewModel.editingText) }
+    var text by remember { mutableStateOf(initialText) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -38,17 +37,13 @@ fun TextEditorDialog(
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                label = { Text("Shape Text") },
                 modifier = Modifier.fillMaxWidth(),
-                minLines = 2,
+                label = { Text("Text") },
                 maxLines = 5
             )
         },
         confirmButton = {
-            TextButton(onClick = {
-                viewModel.updateShapeText(shapeId, text)
-                onDismiss()
-            }) {
+            TextButton(onClick = { onConfirm(text) }) {
                 Text("OK")
             }
         },
@@ -62,223 +57,258 @@ fun TextEditorDialog(
 
 @Composable
 fun ColorPickerDialog(
-    viewModel: EditorViewModel,
-    onDismiss: () -> Unit
+    currentFillColor: Color,
+    currentStrokeColor: Color,
+    currentTextColor: Color,
+    onDismiss: () -> Unit,
+    onConfirm: (fillColor: Color, strokeColor: Color, textColor: Color) -> Unit
 ) {
-    val shapeId = viewModel.canvasState.selectedShapeId
-    if (shapeId == null) {
-        onDismiss()
-        return
-    }
-
-    val shape = viewModel.getShapesMap()[shapeId]
-    if (shape == null) {
-        onDismiss()
-        return
-    }
-
-    var selectedFillColor by remember { mutableStateOf(Color(shape.fillColor)) }
-    var selectedStrokeColor by remember { mutableStateOf(Color(shape.strokeColor)) }
-    var editingFill by remember { mutableStateOf(true) }
+    var selectedFillColor by remember { mutableStateOf(currentFillColor) }
+    var selectedStrokeColor by remember { mutableStateOf(currentStrokeColor) }
+    var selectedTextColor by remember { mutableStateOf(currentTextColor) }
+    var activeTab by remember { mutableStateOf(0) }
 
     val colors = listOf(
-        // Blues
-        Color(0xFF4FC3F7), Color(0xFF29B6F6), Color(0xFF03A9F4),
-        Color(0xFF039BE5), Color(0xFF0288D1), Color(0xFF0277BD),
-        // Greens
-        Color(0xFF81C784), Color(0xFF66BB6A), Color(0xFF4CAF50),
-        Color(0xFF43A047), Color(0xFF388E3C), Color(0xFF2E7D32),
-        // Yellows/Oranges
-        Color(0xFFFFD54F), Color(0xFFFFCA28), Color(0xFFFFC107),
-        Color(0xFFFFB300), Color(0xFFFFA000), Color(0xFFFF8F00),
-        // Reds/Pinks
-        Color(0xFFE57373), Color(0xFFEF5350), Color(0xFFF44336),
-        Color(0xFFE53935), Color(0xFFD32F2F), Color(0xFFC62828),
-        // Purples
-        Color(0xFFBA68C8), Color(0xFFAB47BC), Color(0xFF9C27B0),
-        Color(0xFF8E24AA), Color(0xFF7B1FA2), Color(0xFF6A1B9A),
-        // Grays
-        Color(0xFFF5F5F5), Color(0xFFEEEEEE), Color(0xFFE0E0E0),
-        Color(0xFFBDBDBD), Color(0xFF9E9E9E), Color(0xFF757575),
-        Color(0xFF616161), Color(0xFF424242), Color(0xFF212121),
-        // Other
-        Color.White, Color.Black
+        Color(0xFFE3F2FD), Color(0xFF90CAF9), Color(0xFF2196F3), Color(0xFF1565C0),
+        Color(0xFFE8F5E9), Color(0xFFA5D6A7), Color(0xFF4CAF50), Color(0xFF2E7D32),
+        Color(0xFFFFF3E0), Color(0xFFFFCC80), Color(0xFFFF9800), Color(0xFFEF6C00),
+        Color(0xFFFFEBEE), Color(0xFFEF9A9A), Color(0xFFF44336), Color(0xFFC62828),
+        Color(0xFFF3E5F5), Color(0xFFCE93D8), Color(0xFF9C27B0), Color(0xFF6A1B9A),
+        Color(0xFFE0F7FA), Color(0xFF80DEEA), Color(0xFF00BCD4), Color(0xFF00838F),
+        Color(0xFFFFFDE7), Color(0xFFFFF59D), Color(0xFFFFEB3B), Color(0xFFF9A825),
+        Color(0xFFEFEBE9), Color(0xFFBCAAA4), Color(0xFF795548), Color(0xFF4E342E),
+        Color.White, Color(0xFFEEEEEE), Color(0xFF9E9E9E), Color(0xFF424242),
+    )
+    
+    val textColors = listOf(
+        Color.Black,
+        Color.White
     )
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Choose Color") },
-        text = {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    ColorTypeButton(
-                        label = "Fill",
-                        color = selectedFillColor,
-                        isSelected = editingFill,
-                        onClick = { editingFill = true }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Colors", style = MaterialTheme.typography.titleLarge)
+
+                // Tabs
+                TabRow(selectedTabIndex = activeTab) {
+                    Tab(
+                        selected = activeTab == 0,
+                        onClick = { activeTab = 0 },
+                        text = { Text("Fill") }
                     )
-                    ColorTypeButton(
-                        label = "Stroke",
-                        color = selectedStrokeColor,
-                        isSelected = !editingFill,
-                        onClick = { editingFill = false }
+                    Tab(
+                        selected = activeTab == 1,
+                        onClick = { activeTab = 1 },
+                        text = { Text("Stroke") }
+                    )
+                    Tab(
+                        selected = activeTab == 2,
+                        onClick = { activeTab = 2 },
+                        text = { Text("Text") }
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(6),
-                    modifier = Modifier.height(200.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(colors) { color ->
-                        val isSelected = if (editingFill) color == selectedFillColor else color == selectedStrokeColor
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(color)
-                                .border(
-                                    width = if (isSelected) 3.dp else 1.dp,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray,
-                                    shape = CircleShape
-                                )
-                                .clickable {
-                                    if (editingFill) {
-                                        selectedFillColor = color
-                                    } else {
-                                        selectedStrokeColor = color
+                when (activeTab) {
+                    0, 1 -> {
+                        // Fill or Stroke color grid
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(8),
+                            modifier = Modifier.height(180.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(colors) { color ->
+                                val isSelected = if (activeTab == 0) color == selectedFillColor else color == selectedStrokeColor
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                        .border(
+                                            width = if (isSelected) 3.dp else 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.3f),
+                                            shape = CircleShape
+                                        )
+                                        .clickable {
+                                            if (activeTab == 0) selectedFillColor = color
+                                            else selectedStrokeColor = color
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = "Selected",
+                                            tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                     }
                                 }
-                        )
+                            }
+                        }
+                    }
+                    2 -> {
+                        // Text color - only black and white
+                        Text("Text Color", style = MaterialTheme.typography.bodyMedium)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        ) {
+                            textColors.forEach { color ->
+                                val isSelected = color == selectedTextColor
+                                Box(
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                        .border(
+                                            width = if (isSelected) 4.dp else 2.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { selectedTextColor = color },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = "Selected",
+                                            tint = if (color == Color.White) Color.Black else Color.White,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Preview
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(selectedFillColor)
+                        .border(3.dp, selectedStrokeColor, RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Preview",
+                        color = selectedTextColor,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+
+                // Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = { onConfirm(selectedFillColor, selectedStrokeColor, selectedTextColor) }) {
+                        Text("Apply")
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                viewModel.updateShapeColor(shapeId, selectedFillColor, selectedStrokeColor)
-                onDismiss()
-            }) {
-                Text("Apply")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
         }
-    )
-}
-
-@Composable
-private fun ColorTypeButton(
-    label: String,
-    color: Color,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                else Color.Transparent
-            )
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(color)
-                .border(1.dp, Color.Gray, CircleShape)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (isSelected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurface
-        )
     }
 }
+
+private fun Color.luminance(): Float {
+    val r = red
+    val g = green
+    val b = blue
+    return 0.299f * r + 0.587f * g + 0.114f * b
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectorStyleDialog(
-    viewModel: EditorViewModel,
-    onDismiss: () -> Unit
+    connector: Connector,
+    onDismiss: () -> Unit,
+    onStyleChange: (ConnectorStyle) -> Unit,
+    onArrowHeadChange: (ArrowHead) -> Unit
 ) {
-    val connectorId = viewModel.canvasState.selectedConnectorId
-    if (connectorId == null) {
-        onDismiss()
-        return
-    }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Connector Style", style = MaterialTheme.typography.titleLarge)
 
-    val connector = viewModel.diagram.connectors.find { it.id == connectorId }
-    if (connector == null) {
-        onDismiss()
-        return
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Connector Style") },
-        text = {
-            Column {
-                Text("Line Style", style = MaterialTheme.typography.labelMedium)
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    com.whiteboard.app.data.model.ConnectorStyle.entries.forEach { style ->
-                        FilterChip(
+                // Line Style
+                Text("Line Style", style = MaterialTheme.typography.titleSmall)
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    ConnectorStyle.entries.forEachIndexed { index, style ->
+                        SegmentedButton(
                             selected = connector.style == style,
-                            onClick = { viewModel.updateConnectorStyle(connectorId, style) },
-                            label = { Text(style.name.lowercase().replaceFirstChar { it.uppercase() }) }
-                        )
+                            onClick = { onStyleChange(style) },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = ConnectorStyle.entries.size
+                            )
+                        ) {
+                            Text(
+                                when (style) {
+                                    ConnectorStyle.STRAIGHT -> "Straight"
+                                    ConnectorStyle.ORTHOGONAL -> "Ortho"
+                                    ConnectorStyle.BEZIER -> "Curve"
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Arrow Head", style = MaterialTheme.typography.labelMedium)
-                Spacer(modifier = Modifier.height(8.dp))
+                // Arrow Head
+                Text("Arrow Head", style = MaterialTheme.typography.titleSmall)
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    ArrowHead.entries.forEachIndexed { index, arrow ->
+                        SegmentedButton(
+                            selected = connector.arrowHead == arrow,
+                            onClick = { onArrowHeadChange(arrow) },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = ArrowHead.entries.size
+                            )
+                        ) {
+                            Text(
+                                when (arrow) {
+                                    ArrowHead.NONE -> "None"
+                                    ArrowHead.END -> "End"
+                                    ArrowHead.BOTH -> "Both"
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
 
+                // Close button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    com.whiteboard.app.data.model.ArrowHead.entries.forEach { arrow ->
-                        FilterChip(
-                            selected = connector.arrowHead == arrow,
-                            onClick = { viewModel.updateConnectorArrowHead(connectorId, arrow) },
-                            label = { 
-                                Text(
-                                    when (arrow) {
-                                        com.whiteboard.app.data.model.ArrowHead.NONE -> "None"
-                                        com.whiteboard.app.data.model.ArrowHead.SINGLE -> "→"
-                                        com.whiteboard.app.data.model.ArrowHead.DOUBLE -> "↔"
-                                    }
-                                ) 
-                            }
-                        )
+                    TextButton(onClick = onDismiss) {
+                        Text("Close")
                     }
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Done")
             }
         }
-    )
+    }
 }
