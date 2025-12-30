@@ -1,71 +1,15 @@
-package com.whiteboard.app.ui.editor.components
-
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import com.whiteboard.app.data.model.*
-
-@Composable
-fun TextEditorDialog(
-    initialText: String,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
-) {
-    var text by remember { mutableStateOf(initialText) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit Text") },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Text") },
-                maxLines = 5
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(text) }) {
-                Text("OK")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
 @Composable
 fun ColorPickerDialog(
-    currentFillColor: Color,
-    currentStrokeColor: Color,
-    currentTextColor: Color,
-    onDismiss: () -> Unit,
-    onConfirm: (fillColor: Color, strokeColor: Color, textColor: Color) -> Unit
+    viewModel: EditorViewModel,
+    onDismiss: () -> Unit
 ) {
-    var selectedFillColor by remember { mutableStateOf(currentFillColor) }
-    var selectedStrokeColor by remember { mutableStateOf(currentStrokeColor) }
-    var selectedTextColor by remember { mutableStateOf(currentTextColor) }
+    val selectedShape = viewModel.canvasState.selectedShapeId?.let { id ->
+        viewModel.diagram.shapes.find { it.id == id }
+    } ?: return
+    
+    var selectedFillColor by remember { mutableStateOf(Color(selectedShape.fillColor)) }
+    var selectedStrokeColor by remember { mutableStateOf(Color(selectedShape.strokeColor)) }
+    var selectedTextColor by remember { mutableStateOf(Color(selectedShape.textColor)) }
     var activeTab by remember { mutableStateOf(0) }
 
     val colors = listOf(
@@ -216,7 +160,10 @@ fun ColorPickerDialog(
                         Text("Cancel")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = { onConfirm(selectedFillColor, selectedStrokeColor, selectedTextColor) }) {
+                    Button(onClick = { 
+                        viewModel.updateShapeColor(selectedShape.id, selectedFillColor, selectedStrokeColor, selectedTextColor)
+                        onDismiss()
+                    }) {
                         Text("Apply")
                     }
                 }
@@ -230,85 +177,4 @@ private fun Color.luminance(): Float {
     val g = green
     val b = blue
     return 0.299f * r + 0.587f * g + 0.114f * b
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ConnectorStyleDialog(
-    connector: Connector,
-    onDismiss: () -> Unit,
-    onStyleChange: (ConnectorStyle) -> Unit,
-    onArrowHeadChange: (ArrowHead) -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("Connector Style", style = MaterialTheme.typography.titleLarge)
-
-                // Line Style
-                Text("Line Style", style = MaterialTheme.typography.titleSmall)
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    ConnectorStyle.entries.forEachIndexed { index, style ->
-                        SegmentedButton(
-                            selected = connector.style == style,
-                            onClick = { onStyleChange(style) },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = ConnectorStyle.entries.size
-                            )
-                        ) {
-                            Text(
-                                when (style) {
-                                    ConnectorStyle.STRAIGHT -> "Straight"
-                                    ConnectorStyle.ORTHOGONAL -> "Ortho"
-                                    ConnectorStyle.BEZIER -> "Curve"
-                                },
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                }
-
-                // Arrow Head
-                Text("Arrow Head", style = MaterialTheme.typography.titleSmall)
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    ArrowHead.entries.forEachIndexed { index, arrow ->
-                        SegmentedButton(
-                            selected = connector.arrowHead == arrow,
-                            onClick = { onArrowHeadChange(arrow) },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = ArrowHead.entries.size
-                            )
-                        ) {
-                            Text(
-                                when (arrow) {
-                                    ArrowHead.NONE -> "None"
-                                    ArrowHead.END -> "End"
-                                    ArrowHead.BOTH -> "Both"
-                                },
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                }
-
-                // Close button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Close")
-                    }
-                }
-            }
-        }
-    }
 }
